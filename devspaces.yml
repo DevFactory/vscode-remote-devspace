@@ -1,0 +1,21 @@
+name: vscode-remote
+description: vscode-remote
+
+docker-file: Dockerfile
+
+docker-build-includes: |
+  **/*
+
+ports:
+  - protocol: tcp
+    port-number: 22
+    description: SSH port
+  - protocol: http
+    port-number: 3000
+    description: web app http port
+
+sync-ignore: |
+  .git
+  **/node_modules
+  .DS_Store
+  .vscode-remote
