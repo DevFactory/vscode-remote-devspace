@@ -27,7 +27,7 @@ log ()
 configure_ssh()
 {
     log "Configuring SSH on your machine..."
-    if [ -z "${SSH_HOST_NAME}" ] && [ -z "${SSH_PORT}" ] && [ -z "${DS_NAME}" ]; then
+    if [ -z "${SSH_HOST_NAME}" ] || [ -z "${SSH_PORT}" ] || [ -z "${DS_NAME}" ]; then
         log "Missing DevSpace name, hostname or port"
         exit 1
     fi
@@ -69,6 +69,14 @@ run_devspace()
 {
     log "Preparing DevSpace ${DS_NAME}"
     local ds_status=$(devspaces ls | grep "${DS_NAME}" | awk -F"|" '{print $3}' | sed 's/ //g')
+
+    while [ "${ds_status}" == "Stopping" ] || [ "${ds_status}" == "Building" ];
+    do
+        log "Waiting for DevSpace ${DS_NAME} to stop..."
+        sleep 5
+        ds_status=$(devspaces ls | grep "${DS_NAME}" | awk -F"|" '{print $3}' | sed 's/ //g')
+    done
+
     if [ "${ds_status}" == "Stopped" ]; then
         log "Starting DevSpace ${DS_NAME}"
         devspaces start "${DS_NAME}"
@@ -76,18 +84,31 @@ run_devspace()
 
     while [ ! "${ds_status}" == "Running" ]
     do
+        log "Waiting for DevSpace ${DS_NAME} to start..."
         sleep 5
         ds_status=$(devspaces ls | grep "${DS_NAME}" | awk -F"|" '{print $3}' | sed 's/ //g')
     done
     log "DevSpace ${DS_NAME} is ready"
 }
 
-get_devspace_url_and_port()
+extract_data_from_devspace_info()
 {
-    log "Collecting DevSpace ${DS_NAME} info"
     local ssh_url=$(devspaces info ${DS_NAME} | grep "tcp://")
     SSH_HOST_NAME=$(echo ${ssh_url} | awk -F":" '{print $2}' | sed -e 's/\///g' | sed -e 's/ //g')
     SSH_PORT=$(echo ${ssh_url} | awk -F":" '{print $3}' | awk '{print $1}' | sed -e 's/ //g')
+}
+
+collect_devspace_url_and_port()
+{
+    log "Collecting DevSpace ${DS_NAME} info"
+    extract_data_from_devspace_info
+
+    if [ -z "${SSH_HOST_NAME}" ] || [ -z "${SSH_PORT}" ]; then
+        log "Failed to extract host name or port. Retrying..."
+        sleep 5
+        extract_data_from_devspace_info
+    fi
+
     log "Extracted ${DS_NAME} info. Host: ${SSH_HOST_NAME}, Port: ${SSH_PORT}"
 }
 
@@ -113,7 +134,7 @@ fi
 
 log "Launching...."
 run_devspace
-get_devspace_url_and_port
+collect_devspace_url_and_port
 configure_ssh
 add_ssh_to_devspace
 code-insiders
